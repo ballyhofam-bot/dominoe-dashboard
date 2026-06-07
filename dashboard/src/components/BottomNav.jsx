@@ -1,9 +1,9 @@
-import { LayoutDashboard, BarChart3, Car, PenSquare, Users } from 'lucide-react'
+import { LayoutDashboard, History, Car, PenSquare, Users } from 'lucide-react'
 
 const TABS = [
   { id: 'log',         label: 'Log Entry', icon: PenSquare },
   { id: 'overview',    label: 'Overview',  icon: LayoutDashboard },
-  { id: 'streams',     label: 'Streams',   icon: BarChart3 },
+  { id: 'streams',     label: 'History',   icon: History },
   { id: 'fleet',       label: 'Fleet',     icon: Car },
   { id: 'contractors', label: '1099',      icon: Users },
 ]

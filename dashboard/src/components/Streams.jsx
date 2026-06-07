@@ -1,4 +1,13 @@
-import { STREAM_MTD, CARWASH_PACKAGES, WHOLESALE_PIPELINE, streamColor, formatCurrency } from '../data/mock'
+import { useState } from 'react'
+import { RECENT_TRANSACTIONS, WHOLESALE_PIPELINE, STREAM_MTD, streamColor, formatCurrency, formatDate } from '../data/mock'
+
+const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'turo', label: 'Turo' },
+  { id: 'detail', label: 'Detail' },
+  { id: 'carwash', label: 'Car Wash' },
+  { id: 'wholesale', label: 'Wholesale' },
+]
 
 const PIPELINE_COLORS = {
   sourced: { bg: 'rgba(74,158,255,.15)', color: 'var(--blue)' },
@@ -8,94 +17,101 @@ const PIPELINE_COLORS = {
 }
 
 export default function Streams() {
-  const entries = Object.entries(STREAM_MTD)
-  const maxMtd = Math.max(...entries.map(([, s]) => s.mtd))
+  const [filter, setFilter] = useState('all')
+
+  const filtered = filter === 'all'
+    ? RECENT_TRANSACTIONS
+    : RECENT_TRANSACTIONS.filter(tx => tx.stream === filter)
+
+  const activeStream = filter !== 'all' ? STREAM_MTD[filter] : null
 
   return (
     <div className="tab-content">
-      <div className="section-header" style={{ marginTop: 0 }}>Revenue by Stream</div>
+      {/* Filter pills */}
+      <div className="stream-pills">
+        {FILTERS.map(f => (
+          <button
+            key={f.id}
+            className={`stream-pill ${filter === f.id ? 'active' : ''}`}
+            onClick={() => setFilter(f.id)}
+          >
+            {f.id !== 'all' && (
+              <span className="status-dot" style={{ background: streamColor(f.id), marginRight: 4 }} />
+            )}
+            {f.label}
+          </button>
+        ))}
+      </div>
 
-      {entries.length === 0 ? (
+      {/* Stream summary when filtered */}
+      {activeStream && (
+        <div className="card" style={{ textAlign: 'center', marginBottom: 16 }}>
+          <div className="card-title">{activeStream.label} — June</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: streamColor(filter), marginTop: 4 }}>
+            {formatCurrency(activeStream.mtd)}
+          </div>
+          <div className="card-sub">{activeStream.count} transaction{activeStream.count !== 1 ? 's' : ''}</div>
+        </div>
+      )}
+
+      {/* Transaction list */}
+      <div className="section-header" style={{ marginTop: activeStream ? 0 : undefined }}>
+        {filter === 'all' ? 'All Transactions' : `${FILTERS.find(f => f.id === filter)?.label} Entries`}
+      </div>
+
+      {filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">📊</div>
-          <div className="empty-title">No revenue this month</div>
-          <div className="empty-sub">Start logging entries and your streams will fill in automatically</div>
+          <div className="empty-icon">📋</div>
+          <div className="empty-title">No entries yet</div>
+          <div className="empty-sub">
+            {filter === 'all'
+              ? 'Start logging from the Log Entry tab'
+              : `No ${FILTERS.find(f => f.id === filter)?.label.toLowerCase()} entries this month`
+            }
+          </div>
         </div>
       ) : (
-        <div className="card-grid">
-          {entries.map(([key, s]) => (
-            <div className="card" key={key}>
-              <div className="card-header">
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="status-dot" style={{ background: streamColor(key) }} />
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>{s.label}</span>
-                </span>
-                <span className={`badge ${s.auto ? 'badge-auto' : 'badge-manual'}`}>
-                  {s.auto ? 'Auto' : 'Manual'}
-                </span>
+        <div className="card" style={{ padding: '4px 16px' }}>
+          {filtered.map((tx, i) => (
+            <div className="txn-row" key={i}>
+              <div className="txn-dot" style={{ background: streamColor(tx.stream) }} />
+              <div className="txn-info">
+                <div className="txn-label">{tx.label}</div>
+                <div className="txn-date">{formatDate(tx.date)}</div>
               </div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{formatCurrency(s.mtd)}</div>
-              {s.count != null && <div className="card-sub">{s.count} transactions</div>}
-              <div className="rev-bar-track">
-                <div
-                  className="rev-bar-fill"
-                  style={{
-                    width: `${(s.mtd / maxMtd) * 100}%`,
-                    background: streamColor(key),
-                  }}
-                />
+              <div className="txn-amount" style={{ color: 'var(--green)' }}>
+                +{formatCurrency(tx.amount)}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Car Wash Package Breakdown */}
-      <div className="section-header">Car Wash Packages</div>
-      <div className="card">
-        {CARWASH_PACKAGES.map((pkg, i) => (
-          <div key={pkg.name} style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '10px 0',
-            borderBottom: i < CARWASH_PACKAGES.length - 1 ? '1px solid var(--border)' : 'none',
-          }}>
-            <span style={{ fontSize: 14, fontWeight: 500 }}>{pkg.name}</span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)' }}>${pkg.price}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Wholesale Pipeline */}
-      <div className="section-header">Wholesale Pipeline</div>
-      {WHOLESALE_PIPELINE.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">🚘</div>
-          <div className="empty-title">Pipeline empty</div>
-          <div className="empty-sub">Auction purchases will appear here as they move through stages</div>
-        </div>
-      ) : (
-        <div className="fleet-grid">
-          {WHOLESALE_PIPELINE.map(v => {
-            const stage = PIPELINE_COLORS[v.status] || PIPELINE_COLORS.sourced
-            return (
-              <div className="card fleet-card" key={v.id}>
-                <div className="fleet-info">
-                  <div className="fleet-name">{v.year} {v.make} {v.model}</div>
-                  <div className="fleet-meta">
-                    <span>Cost: {formatCurrency(v.cost)}</span>
-                    <span>•</span>
-                    <span>{v.source}</span>
+      {/* Wholesale Pipeline — only show when viewing all or wholesale */}
+      {(filter === 'all' || filter === 'wholesale') && WHOLESALE_PIPELINE.length > 0 && (
+        <>
+          <div className="section-header">Wholesale Pipeline</div>
+          <div className="fleet-grid">
+            {WHOLESALE_PIPELINE.map(v => {
+              const stage = PIPELINE_COLORS[v.status] || PIPELINE_COLORS.sourced
+              return (
+                <div className="card fleet-card" key={v.id}>
+                  <div className="fleet-info">
+                    <div className="fleet-name">{v.year} {v.make} {v.model}</div>
+                    <div className="fleet-meta">
+                      <span>Cost: {formatCurrency(v.cost)}</span>
+                      <span>·</span>
+                      <span>{v.source}</span>
+                    </div>
                   </div>
+                  <span className="pipeline-stage" style={{ background: stage.bg, color: stage.color }}>
+                    {v.status}
+                  </span>
                 </div>
-                <span className="pipeline-stage" style={{ background: stage.bg, color: stage.color }}>
-                  {v.status}
-                </span>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )
