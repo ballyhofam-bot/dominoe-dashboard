@@ -1,0 +1,9 @@
+{
+  "projectName": "dominoe-dashboard",
+  "client": "Ash Bhojwani / Dominoe Brokers LLC",
+  "serviceProvider": "Florence SC Services LLC",
+  "stack": {
+    "frontend": "React + Vite → Netlify",
+    "backend": "Cloudflare Workers + D1"
+  }
+}
