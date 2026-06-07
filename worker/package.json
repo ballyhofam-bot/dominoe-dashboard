@@ -1,0 +1,15 @@
+{
+  "name": "dominoe-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create dominoe-db",
+    "db:migrate": "wrangler d1 execute dominoe-db --file=./schema.sql",
+    "db:migrate:local": "wrangler d1 execute dominoe-db --local --file=./schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
