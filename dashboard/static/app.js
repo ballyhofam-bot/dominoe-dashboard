@@ -29,6 +29,11 @@ const AUCTION_HOUSES = ['Manheim','ADESA','Other'];
 const WHOLESALE_SOURCES = ['Manheim','ADESA','Private Sale','Other'];
 const RENTAL_PLATFORMS = ['Turo','Direct Rental'];
 const RENTAL_EXPENSE_TYPES = ['Insurance','Property Tax','Maintenance','Gas/Fuel','Other'];
+const OTHER_PROMPTS = {
+  auctionHouse: "What's the name of this auction house?",
+  source: "What's the name of this source?",
+  expenseSubType: "What type of expense is this?",
+};
 
 const DEFAULT_FLEET = [
   '2026 Nissan Sentra','2025 Jeep Grand Cherokee','2025 Jeep Gladiator High Tide',
@@ -63,6 +68,9 @@ const Store = {
   getEntityBanks()    { return this._get('domino_entity_banks', {}); },
   setEntityBank(ent, bank) { const m = this.getEntityBanks(); m[ent] = bank; this._set('domino_entity_banks', m); },
   getEntityBank(ent)  { return this.getEntityBanks()[ent] || ''; },
+
+  getCustomOptions(field) { return this._get('domino_custom_' + field, []); },
+  addCustomOption(field, val) { const o = this.getCustomOptions(field); if (!o.includes(val)) { o.push(val); this._set('domino_custom_' + field, o); } },
 };
 
 if (Store.getFleet().length === 0) Store.saveFleet(DEFAULT_FLEET);
@@ -145,6 +153,13 @@ function getFiltered(entity, month) {
   if (entity) entries = entries.filter(e => e.entity === entity);
   if (month && month !== 'both') entries = entries.filter(e => matchesMonth(e.date, month));
   return entries;
+}
+
+function getOptionsWithCustom(base, field) {
+  const custom = Store.getCustomOptions(field);
+  const idx = base.indexOf('Other');
+  if (idx === -1) return [...base, ...custom];
+  return [...base.slice(0, idx), ...custom, 'Other'];
 }
 
 function sumBy(entries, type) {
@@ -664,7 +679,7 @@ function entitySpecificFields(entity) {
       h += inputField('vehicleDesc', 'Vehicle (Year Make Model)', 'text', '2020 Honda Accord');
       h += inputField('buyPrice', 'Buy Price', 'number', '0.00', '.01');
       h += inputField('sellPrice', 'Sell Price', 'number', '0.00', '.01');
-      h += dropdownField('source', 'Source', WHOLESALE_SOURCES);
+      h += dropdownField('source', 'Source', getOptionsWithCustom(WHOLESALE_SOURCES, 'source'));
       h += `<div id="wholesale-calc" class="calc-row" style="display:none">
         <div class="calc-label">Profit / Loss</div>
         <div class="calc-value" id="wholesale-pl">$0.00</div>
@@ -687,7 +702,7 @@ function entitySpecificFields(entity) {
       h += `<div class="field" id="rental-expense-field" style="display:none">
         <label class="field-label">Expense Type</label>
         <div class="toggle-row">
-          ${RENTAL_EXPENSE_TYPES.map((t, i) =>
+          ${getOptionsWithCustom(RENTAL_EXPENSE_TYPES, 'expenseSubType').map((t, i) =>
             `<button type="button" class="toggle-btn ${i===0?'active':''}" data-field="expenseSubType" data-value="${t}" onclick="toggleSelect(this)">${t}</button>`
           ).join('')}
         </div>
@@ -703,7 +718,7 @@ function entitySpecificFields(entity) {
     case 'auctions':
       h += inputField('vehicleDesc', 'Vehicle (Year Make Model)', 'text', '2019 Nissan Altima');
       h += inputField('purchasePrice', 'Purchase Price', 'number', '0.00', '.01');
-      h += dropdownField('auctionHouse', 'Auction House', AUCTION_HOUSES);
+      h += dropdownField('auctionHouse', 'Auction House', getOptionsWithCustom(AUCTION_HOUSES, 'auctionHouse'));
       h += inputField('fees', 'Fees (transport, buyer fee, etc.)', 'number', '0.00', '.01');
       h += `<div id="auction-calc" class="calc-row" style="display:none">
         <div class="calc-label">Total Cost</div>
@@ -881,6 +896,16 @@ function submitEntry(e, entity) {
       break;
     }
   }
+
+  ['auctionHouse', 'source', 'expenseSubType'].forEach(field => {
+    if (entry[field] === 'Other') {
+      const label = prompt(OTHER_PROMPTS[field] || 'What would you like to call this?');
+      if (label && label.trim()) {
+        entry[field] = label.trim();
+        Store.addCustomOption(field, label.trim());
+      }
+    }
+  });
 
   if (!entry.amount || entry.amount <= 0) {
     showToast('Enter a valid amount');
