@@ -651,8 +651,13 @@ function entitySpecificFields(entity) {
       break;
 
     case 'carwash':
+      h += `<div id="carwash-income-fields">`;
       h += dropdownField('washType', 'Wash Type', WASH_TYPES);
       h += inputField('washCount', 'Number of Washes', 'number', '1');
+      h += `</div>`;
+      h += `<div id="carwash-expense-fields" style="display:none">`;
+      h += inputField('expenseDesc', 'What was the expense for?', 'text', 'Supplies, water bill, equipment...');
+      h += `</div>`;
       break;
 
     case 'wholesale':
@@ -743,11 +748,17 @@ function toggleType(btn) {
   const hidden = row.parentElement.querySelector('input[type="hidden"]');
   if (hidden) hidden.value = btn.dataset.value;
 
+  const isExpense = btn.dataset.value === 'expense';
+
   // Show/hide rental expense subtype
   const expField = document.getElementById('rental-expense-field');
-  if (expField) {
-    expField.style.display = btn.dataset.value === 'expense' ? '' : 'none';
-  }
+  if (expField) expField.style.display = isExpense ? '' : 'none';
+
+  // Show/hide carwash income vs expense fields
+  const cwInc = document.getElementById('carwash-income-fields');
+  const cwExp = document.getElementById('carwash-expense-fields');
+  if (cwInc) cwInc.style.display = isExpense ? 'none' : '';
+  if (cwExp) cwExp.style.display = isExpense ? '' : 'none';
 }
 
 function toggleSelect(btn) {
@@ -826,6 +837,7 @@ function submitEntry(e, entity) {
     case 'carwash': {
       entry.washType = data.washType || '';
       entry.washCount = parseInt(data.washCount) || 1;
+      entry.expenseDesc = data.expenseDesc || '';
       entry.amount = parseFloat(data.amount) || 0;
       break;
     }
@@ -949,6 +961,7 @@ function entryDescription(e) {
     case 'detail':
       return `${e.serviceType || 'Detail'} — ${e.customerName || 'Customer'}`;
     case 'carwash':
+      if (e.type === 'expense' && e.expenseDesc) return e.expenseDesc;
       return `${e.washType || 'Car Wash'}${e.washCount > 1 ? ' ×' + e.washCount : ''}`;
     case 'wholesale':
       if (e.vehicleDesc) return e.vehicleDesc + (e.profitLoss != null ? ` (${e.profitLoss >= 0 ? '+' : ''}${fmt(e.profitLoss)})` : '');
