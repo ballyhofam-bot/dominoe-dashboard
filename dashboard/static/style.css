@@ -369,50 +369,89 @@ html, body {
 
 /* ── Setup Wizard ─── */
 .setup-wizard {
-  padding: 20px 16px 40px;
+  padding: 24px 16px 40px;
 }
-.setup-step {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  color: var(--accent);
-  margin-bottom: 8px;
+.setup-progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 24px;
 }
+.setup-dot {
+  height: 4px;
+  flex: 1;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background .2s;
+}
+.setup-dot.filled { background: var(--accent); }
+.setup-dot.current { background: var(--accent); }
 .setup-title {
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 24px;
   font-weight: 800;
   color: var(--text);
   margin-bottom: 8px;
+  line-height: 1.3;
 }
 .setup-desc {
   font-size: 14px;
   color: var(--text2);
   line-height: 1.5;
-  margin-bottom: 20px;
-}
-.setup-hint {
-  font-size: 13px;
-  color: var(--text3);
-  text-align: center;
-  margin-top: 16px;
-}
-.setup-banks-list {
+  margin-bottom: 24px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
 }
-.setup-bank-item {
+.setup-bank-btn {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'Barlow', sans-serif;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent-dark);
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: background .15s;
+}
+.setup-bank-btn:active { background: var(--accent-dim); }
+.setup-bank-btn.new {
+  border-color: var(--border2);
+  color: var(--text2);
+  border-style: dashed;
+}
+.setup-or {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text3);
+  margin: 8px 0;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.setup-balance-input {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  font-size: 15px;
-  font-weight: 600;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-top: 8px;
+}
+.setup-balance-prefix {
+  padding: 14px 0 14px 16px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text2);
+}
+.setup-balance-field {
+  border: none !important;
+  font-size: 24px;
+  font-weight: 700;
+  padding: 14px 16px 14px 8px;
+  background: transparent;
 }
 
 /* ── Entity bank badge ─── */

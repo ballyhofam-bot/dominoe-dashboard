@@ -79,29 +79,37 @@ const state = {
 
 let chartInstance = null;
 
-// ── SETUP DETECTION ───────────────────────────────────────────────
+// ── SETUP ─────────────────────────────────────────────────────────
+const SETUP_ORDER = ['detail','carwash','wholesale','rentals','contractors','auctions'];
+const SETUP_QUESTIONS = {
+  detail:      'What bank account do you use for Mobile Detailing?',
+  carwash:     'What bank account do you use for the Car Wash?',
+  wholesale:   'What bank account do you use for Wholesale?',
+  rentals:     'What bank account do you use for Rentals?',
+  contractors: 'What bank account do you use for 1099 Payments?',
+  auctions:    'What bank account do you use for Auction Buys?',
+};
+
 function isSetupComplete() {
-  const banks = Store.getBanks();
-  if (banks.length === 0) return false;
-  const baselines = Store.getBaselines();
-  const hasAllBaselines = banks.every(b => baselines[b] && baselines[b].amount != null);
-  if (!hasAllBaselines) return false;
   const entityBankMap = Store.getEntityBanks();
-  const hasAnyAssignment = Object.values(entityBankMap).some(b => b);
-  return hasAnyAssignment;
+  const allAssigned = SETUP_ORDER.every(e => entityBankMap[e]);
+  if (!allAssigned) return false;
+  const banks = [...new Set(Object.values(entityBankMap).filter(Boolean))];
+  const baselines = Store.getBaselines();
+  return banks.every(b => baselines[b] && baselines[b].amount != null);
 }
 
-function getSetupStep() {
-  const banks = Store.getBanks();
-  const baselines = Store.getBaselines();
+function getSetupProgress() {
   const entityBankMap = Store.getEntityBanks();
-  const hasAnyAssignment = Object.values(entityBankMap).some(b => b);
-  const hasAllBaselines = banks.length > 0 && banks.every(b => baselines[b] && baselines[b].amount != null);
-
-  if (banks.length === 0) return 'banks';
-  if (!hasAnyAssignment) return 'assign';
-  if (!hasAllBaselines) return 'baselines';
-  return 'done';
+  for (let i = 0; i < SETUP_ORDER.length; i++) {
+    if (!entityBankMap[SETUP_ORDER[i]]) return { phase: 'entity', index: i };
+  }
+  const banks = [...new Set(Object.values(entityBankMap).filter(Boolean))];
+  const baselines = Store.getBaselines();
+  for (let i = 0; i < banks.length; i++) {
+    if (!baselines[banks[i]] || baselines[banks[i]].amount == null) return { phase: 'balance', bank: banks[i], bankIndex: i, bankCount: banks.length };
+  }
+  return { phase: 'done' };
 }
 
 // ── HELPERS ────────────────────────────────────────────────────────
@@ -175,10 +183,9 @@ function render() {
 }
 
 function renderSetupWizard() {
-  const step = getSetupStep();
-  const banks = Store.getBanks();
-  const baselines = Store.getBaselines();
+  const progress = getSetupProgress();
   const entityBankMap = Store.getEntityBanks();
+  const knownBanks = [...new Set(Object.values(entityBankMap).filter(Boolean))];
 
   $('#app-header').innerHTML = `<div style="display:flex;align-items:center;gap:10px">
     <span class="header-brand">Dominoe</span>
@@ -186,68 +193,87 @@ function renderSetupWizard() {
   $('#month-bar').innerHTML = '';
   $('#tab-bar').innerHTML = '';
 
-  let html = '';
+  let html = '<div class="setup-wizard">';
 
-  if (step === 'banks') {
-    html += `<div class="setup-wizard">
-      <div class="setup-step">Step 1 of 3</div>
-      <h2 class="setup-title">Welcome! Let's get you set up.</h2>
-      <p class="setup-desc">First, add your bank accounts. You can always add more later.</p>
-      <div class="setup-banks-list">`;
-    banks.forEach(b => {
-      html += `<div class="setup-bank-item"><span>${b}</span><button class="btn-danger" onclick="removeBank('${b.replace(/'/g, "\\'")}')">✕</button></div>`;
-    });
-    html += `</div>
-      <button class="btn-secondary" style="width:100%;margin-top:12px" onclick="addBankPrompt()">+ Add Bank Account</button>
-      ${banks.length > 0 ? `<button class="btn-submit" style="width:100%;margin-top:16px" onclick="render()">Next →</button>` : ''}
-    </div>`;
+  if (progress.phase === 'entity') {
+    const key = SETUP_ORDER[progress.index];
+    const ent = ENTITIES[key];
+    const stepNum = progress.index + 1;
+    const totalSteps = SETUP_ORDER.length;
 
-  } else if (step === 'assign') {
-    html += `<div class="setup-wizard">
-      <div class="setup-step">Step 2 of 3</div>
-      <h2 class="setup-title">Connect your businesses to their banks</h2>
-      <p class="setup-desc">Pick which bank account each business uses. If two businesses share the same bank, just pick the same one for both.</p>
-      <div class="card" style="padding:4px 14px">`;
-    const ownEntities = Object.entries(ENTITIES).filter(([_, e]) => e.own);
-    const partnerEntities = Object.entries(ENTITIES).filter(([_, e]) => !e.own);
-    html += `<div class="assign-group-label">Ash's Own</div>`;
-    ownEntities.forEach(([key, ent]) => { html += bankAssignRow(key, ent, banks, entityBankMap); });
-    html += `<div class="assign-group-label" style="margin-top:10px">Partnered</div>`;
-    partnerEntities.forEach(([key, ent]) => { html += bankAssignRow(key, ent, banks, entityBankMap); });
-    html += `</div>
-      ${Object.values(entityBankMap).some(b => b) ? `<button class="btn-submit" style="width:100%;margin-top:16px" onclick="render()">Next →</button>` : `<p class="setup-hint">Assign at least one business to continue</p>`}
-    </div>`;
-
-  } else if (step === 'baselines') {
-    html += `<div class="setup-wizard">
-      <div class="setup-step">Step 3 of 3</div>
-      <h2 class="setup-title">Set your starting balances</h2>
-      <p class="setup-desc">Open your bank app and enter the current balance for each account. You only have to do this once.</p>`;
-    banks.forEach((bank, bi) => {
-      const bl = baselines[bank];
-      if (bl && bl.amount != null) {
-        html += `<div class="bank-card" style="margin-bottom:10px">
-          <div class="bank-card-header"><span class="bank-card-name">${bank}</span><span style="color:var(--green);font-weight:700">✓ ${fmt(bl.amount)}</span></div>
-        </div>`;
-      } else {
-        html += `<div class="bank-card" style="margin-bottom:10px">
-          <div class="bank-card-header"><span class="bank-card-name">${bank}</span></div>
-          <div class="bank-baseline-input">
-            <input class="input" type="number" id="bl-bank-${bi}" placeholder="Current balance" step=".01">
-            <input class="input" type="date" id="bl-bankdate-${bi}" value="${todayStr()}" style="max-width:140px">
-            <button class="btn-secondary" onclick="saveBankBaseline(${bi})">Set</button>
-          </div>
-        </div>`;
-      }
-    });
-    const allSet = banks.every(b => baselines[b] && baselines[b].amount != null);
-    if (allSet) {
-      html += `<button class="btn-submit" style="width:100%;margin-top:16px" onclick="render()">All done — Go to Dashboard →</button>`;
+    // Progress dots
+    html += `<div class="setup-progress">`;
+    for (let i = 0; i < totalSteps; i++) {
+      html += `<div class="setup-dot ${i < stepNum ? 'filled' : ''} ${i === progress.index ? 'current' : ''}"></div>`;
     }
     html += `</div>`;
+
+    html += `<h2 class="setup-title">${SETUP_QUESTIONS[key]}</h2>`;
+    html += `<p class="setup-desc"><span class="entity-dot" style="background:${ent.color}"></span> ${ent.full}</p>`;
+
+    // Show previously entered banks as big tap targets
+    if (knownBanks.length > 0) {
+      knownBanks.forEach(b => {
+        const safeB = b.replace(/'/g, "\\'");
+        html += `<button class="setup-bank-btn" onclick="setupPickBank('${key}', '${safeB}')">${b}</button>`;
+      });
+      html += `<div class="setup-or">or</div>`;
+    }
+
+    html += `<button class="setup-bank-btn new" onclick="setupNewBank('${key}')">+ Different Bank Account</button>`;
+
+  } else if (progress.phase === 'balance') {
+    const bank = progress.bank;
+
+    html += `<div class="setup-progress">`;
+    for (let i = 0; i < SETUP_ORDER.length; i++) {
+      html += `<div class="setup-dot filled"></div>`;
+    }
+    html += `</div>`;
+
+    html += `<h2 class="setup-title">What was the balance in ${bank} on June 1st?</h2>`;
+    html += `<p class="setup-desc">Check your bank app or last statement. This is your starting point — you only enter this once.</p>`;
+
+    html += `<div class="setup-balance-input">
+      <div class="setup-balance-prefix">$</div>
+      <input class="input setup-balance-field" type="number" id="setup-balance" placeholder="0.00" step=".01" autofocus>
+    </div>`;
+    html += `<button class="btn-submit" style="width:100%;margin-top:20px" onclick="setupSaveBalance('${bank.replace(/'/g, "\\'")}')">Save & Continue</button>`;
   }
 
+  html += '</div>';
   $('#content').innerHTML = html;
+
+  // Auto-focus the balance input
+  if (progress.phase === 'balance') {
+    const inp = document.getElementById('setup-balance');
+    if (inp) inp.focus();
+  }
+}
+
+function setupPickBank(entityKey, bankName) {
+  Store.addBank(bankName);
+  Store.setEntityBank(entityKey, bankName);
+  render();
+}
+
+function setupNewBank(entityKey) {
+  const name = prompt('Enter bank name:');
+  if (name && name.trim()) {
+    Store.addBank(name.trim());
+    Store.setEntityBank(entityKey, name.trim());
+    render();
+  }
+}
+
+function setupSaveBalance(bankName) {
+  const input = document.getElementById('setup-balance');
+  if (!input) return;
+  const amount = parseFloat(input.value);
+  if (isNaN(amount)) { showToast('Enter a balance'); return; }
+  Store.setBaseline(bankName, { amount, date: '2026-06-01' });
+  showToast(`${bankName} balance saved`);
+  render();
 }
 
 function renderHeader() {
