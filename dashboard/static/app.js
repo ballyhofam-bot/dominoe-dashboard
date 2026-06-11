@@ -22,7 +22,7 @@ const MONTHS = [
   { key: '2026-06', label: 'Jun', full: 'June 2026' },
 ];
 
-const PAYMENT_METHODS = ['Cash','Card','Venmo','PayPal','Check','SwipeSimple'];
+const PAYMENT_METHODS = ['Cash','Card','Zelle','Venmo','PayPal','Check'];
 const SERVICE_TYPES = ['Full Detail','Interior','Exterior','Wash Only'];
 const WASH_TYPES = ['Basic','Premium','Works'];
 const AUCTION_HOUSES = ['Manheim','ADESA','Other'];
@@ -583,15 +583,20 @@ function renderEntityForm(entity) {
     <input class="input" type="date" name="date" value="${todayStr()}" required>
   </div>`;
 
-  // Shared: income / expense toggle
-  html += `<div class="field">
-    <label class="field-label">Type</label>
-    <div class="toggle-row">
-      <button type="button" class="toggle-btn income active" data-field="type" data-value="income" onclick="toggleType(this)">Income</button>
-      <button type="button" class="toggle-btn expense" data-field="type" data-value="expense" onclick="toggleType(this)">Expense</button>
-    </div>
-    <input type="hidden" name="type" value="income">
-  </div>`;
+  // Income / expense toggle — hidden on tabs where type is auto-determined
+  const autoType = (entity === 'contractors' || entity === 'auctions' || entity === 'wholesale');
+  if (autoType) {
+    html += `<input type="hidden" name="type" value="expense">`;
+  } else {
+    html += `<div class="field">
+      <label class="field-label">Type</label>
+      <div class="toggle-row">
+        <button type="button" class="toggle-btn income active" data-field="type" data-value="income" onclick="toggleType(this)">Income</button>
+        <button type="button" class="toggle-btn expense" data-field="type" data-value="expense" onclick="toggleType(this)">Expense</button>
+      </div>
+      <input type="hidden" name="type" value="income">
+    </div>`;
+  }
 
   // Entity-specific fields
   html += entitySpecificFields(entity);
