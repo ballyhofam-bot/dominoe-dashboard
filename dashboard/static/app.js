@@ -80,6 +80,31 @@ const state = {
 
 let chartInstance = null;
 
+// ── SETUP DETECTION ───────────────────────────────────────────────
+function isSetupComplete() {
+  const banks = Store.getBanks();
+  if (banks.length === 0) return false;
+  const baselines = Store.getBaselines();
+  const hasAllBaselines = banks.every(b => baselines[b] && baselines[b].amount != null);
+  if (!hasAllBaselines) return false;
+  const entityBankMap = Store.getEntityBanks();
+  const hasAnyAssignment = Object.values(entityBankMap).some(b => b);
+  return hasAnyAssignment;
+}
+
+function getSetupStep() {
+  const banks = Store.getBanks();
+  const baselines = Store.getBaselines();
+  const entityBankMap = Store.getEntityBanks();
+  const hasAnyAssignment = Object.values(entityBankMap).some(b => b);
+  const hasAllBaselines = banks.length > 0 && banks.every(b => baselines[b] && baselines[b].amount != null);
+
+  if (banks.length === 0) return 'banks';
+  if (!hasAnyAssignment) return 'assign';
+  if (!hasAllBaselines) return 'baselines';
+  return 'done';
+}
+
 // ── HELPERS ────────────────────────────────────────────────────────
 function $(sel) { return document.querySelector(sel); }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -140,10 +165,90 @@ function contractorTotals() {
 
 // ── RENDER ENGINE ─────────────────────────────────────────────────
 function render() {
+  if (!isSetupComplete() && !state.skipSetup) {
+    renderSetupWizard();
+    return;
+  }
   renderHeader();
   renderMonthBar();
   renderTabs();
   renderContent();
+}
+
+function renderSetupWizard() {
+  const step = getSetupStep();
+  const banks = Store.getBanks();
+  const baselines = Store.getBaselines();
+  const entityBankMap = Store.getEntityBanks();
+
+  $('#app-header').innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+    <span class="header-brand">Dominoe</span>
+  </div>`;
+  $('#month-bar').innerHTML = '';
+  $('#tab-bar').innerHTML = '';
+
+  let html = '';
+
+  if (step === 'banks') {
+    html += `<div class="setup-wizard">
+      <div class="setup-step">Step 1 of 3</div>
+      <h2 class="setup-title">Welcome! Let's get you set up.</h2>
+      <p class="setup-desc">First, add your bank accounts. You can always add more later.</p>
+      <div class="setup-banks-list">`;
+    banks.forEach(b => {
+      html += `<div class="setup-bank-item"><span>${b}</span><button class="btn-danger" onclick="removeBank('${b.replace(/'/g, "\\'")}')">✕</button></div>`;
+    });
+    html += `</div>
+      <button class="btn-secondary" style="width:100%;margin-top:12px" onclick="addBankPrompt()">+ Add Bank Account</button>
+      ${banks.length > 0 ? `<button class="btn-submit" style="width:100%;margin-top:16px" onclick="render()">Next →</button>` : ''}
+    </div>`;
+
+  } else if (step === 'assign') {
+    html += `<div class="setup-wizard">
+      <div class="setup-step">Step 2 of 3</div>
+      <h2 class="setup-title">Connect your businesses to their banks</h2>
+      <p class="setup-desc">Pick which bank account each business uses. If two businesses share the same bank, just pick the same one for both.</p>
+      <div class="card" style="padding:4px 14px">`;
+    const ownEntities = Object.entries(ENTITIES).filter(([_, e]) => e.own);
+    const partnerEntities = Object.entries(ENTITIES).filter(([_, e]) => !e.own);
+    html += `<div class="assign-group-label">Ash's Own</div>`;
+    ownEntities.forEach(([key, ent]) => { html += bankAssignRow(key, ent, banks, entityBankMap); });
+    html += `<div class="assign-group-label" style="margin-top:10px">Partnered</div>`;
+    partnerEntities.forEach(([key, ent]) => { html += bankAssignRow(key, ent, banks, entityBankMap); });
+    html += `</div>
+      ${Object.values(entityBankMap).some(b => b) ? `<button class="btn-submit" style="width:100%;margin-top:16px" onclick="render()">Next →</button>` : `<p class="setup-hint">Assign at least one business to continue</p>`}
+    </div>`;
+
+  } else if (step === 'baselines') {
+    html += `<div class="setup-wizard">
+      <div class="setup-step">Step 3 of 3</div>
+      <h2 class="setup-title">Set your starting balances</h2>
+      <p class="setup-desc">Open your bank app and enter the current balance for each account. You only have to do this once.</p>`;
+    banks.forEach((bank, bi) => {
+      const bl = baselines[bank];
+      if (bl && bl.amount != null) {
+        html += `<div class="bank-card" style="margin-bottom:10px">
+          <div class="bank-card-header"><span class="bank-card-name">${bank}</span><span style="color:var(--green);font-weight:700">✓ ${fmt(bl.amount)}</span></div>
+        </div>`;
+      } else {
+        html += `<div class="bank-card" style="margin-bottom:10px">
+          <div class="bank-card-header"><span class="bank-card-name">${bank}</span></div>
+          <div class="bank-baseline-input">
+            <input class="input" type="number" id="bl-bank-${bi}" placeholder="Current balance" step=".01">
+            <input class="input" type="date" id="bl-bankdate-${bi}" value="${todayStr()}" style="max-width:140px">
+            <button class="btn-secondary" onclick="saveBankBaseline(${bi})">Set</button>
+          </div>
+        </div>`;
+      }
+    });
+    const allSet = banks.every(b => baselines[b] && baselines[b].amount != null);
+    if (allSet) {
+      html += `<button class="btn-submit" style="width:100%;margin-top:16px" onclick="render()">All done — Go to Dashboard →</button>`;
+    }
+    html += `</div>`;
+  }
+
+  $('#content').innerHTML = html;
 }
 
 function renderHeader() {
@@ -397,17 +502,18 @@ function renderEntityTab(container, entity) {
 
   // Bank assignment dropdown
   const assignedBank = Store.getEntityBank(entity);
-  const banks = Store.getBanks();
-  html += `<div class="bank-assign">
-    <label class="field-label">Bank Account</label>
-    <select class="select" onchange="setEntityBank('${entity}', this.value)">
-      <option value="">Not assigned</option>
-      ${banks.map(b => `<option value="${b}" ${b === assignedBank ? 'selected' : ''}>${b}</option>`).join('')}
-    </select>
-  </div>`;
-
-  // Baseline
-  html += renderBaseline(entity);
+  const bankName = assignedBank;
+  if (bankName) {
+    const baselines = Store.getBaselines();
+    const bl = baselines[bankName];
+    if (bl && bl.amount != null) {
+      const ledger = bankLedger(bankName);
+      html += `<div class="entity-bank-badge">
+        <span class="entity-bank-name">🏦 ${bankName}</span>
+        <span class="entity-bank-bal" style="color:${ledger.current >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(ledger.current)}</span>
+      </div>`;
+    }
+  }
 
   // 1099 alerts
   if (entity === 'contractors') {
@@ -444,47 +550,13 @@ function renderEntityTab(container, entity) {
   container.innerHTML = html;
 }
 
-function renderBaseline(entity) {
-  const bankName = Store.getEntityBank(entity);
-  if (!bankName) {
-    return `<div class="baseline-section" style="color:var(--text3);font-size:13px">
-      Assign a bank account above to track a starting balance
-    </div>`;
-  }
-
-  const baselines = Store.getBaselines();
-  const bl = baselines[bankName];
-  const safeBank = bankName.replace(/'/g, "\\'");
-
-  if (bl && bl.amount != null) {
-    return `<div class="baseline-section">
-      <div class="card-title">${bankName} — Starting Balance</div>
-      <div class="baseline-saved">
-        <span>As of ${fmtDate(bl.date)}</span>
-        <span class="baseline-amount">${fmt(bl.amount)}</span>
-      </div>
-      <button class="btn-danger" style="margin-top:8px" onclick="clearBaseline('${safeBank}')">Clear</button>
-    </div>`;
-  }
-
-  return `<div class="baseline-section">
-    <div class="card-title">${bankName} — Starting Balance</div>
-    <div class="baseline-row">
-      <input class="input" type="number" id="bl-amount-${entity}" placeholder="0.00" step=".01">
-      <input class="input" type="date" id="bl-date-${entity}" value="${todayStr()}" style="max-width:160px">
-      <button class="btn-secondary" onclick="saveBaseline('${entity}')">Set</button>
-    </div>
-  </div>`;
-}
-
-function saveBaseline(entity) {
-  const bankName = Store.getEntityBank(entity);
-  if (!bankName) { showToast('Assign a bank first'); return; }
-  const amount = parseFloat(document.getElementById('bl-amount-' + entity).value);
-  const date = document.getElementById('bl-date-' + entity).value;
-  if (isNaN(amount)) { showToast('Enter an amount'); return; }
-  Store.setBaseline(bankName, { amount, date: date || todayStr() });
-  showToast(`${bankName} balance saved`);
+function resetDashboard() {
+  if (!confirm('This will clear your bank accounts, assignments, and starting balances so you can set them up again.\n\nYour transaction history will be kept.\n\nContinue?')) return;
+  localStorage.removeItem('domino_banks');
+  localStorage.removeItem('domino_entity_banks');
+  localStorage.removeItem('domino_baselines');
+  state.tab = 'overview';
+  showToast('Setup cleared — let\'s start fresh');
   render();
 }
 
@@ -1122,33 +1194,16 @@ function renderBanksTab(container) {
   const entityBankMap = Store.getEntityBanks();
   let html = '';
 
-  // Entity → Bank assignment
-  html += `<div class="section-header">Entity → Bank Assignment</div>`;
-  html += `<div class="card" style="padding:4px 14px">`;
-  const ownEntities = Object.entries(ENTITIES).filter(([_, e]) => e.own);
-  const partnerEntities = Object.entries(ENTITIES).filter(([_, e]) => !e.own);
-
-  html += `<div class="assign-group-label">Ash's Own</div>`;
-  ownEntities.forEach(([key, ent]) => {
-    html += bankAssignRow(key, ent, banks, entityBankMap);
-  });
-  html += `<div class="assign-group-label" style="margin-top:10px">Partnered</div>`;
-  partnerEntities.forEach(([key, ent]) => {
-    html += bankAssignRow(key, ent, banks, entityBankMap);
-  });
-  html += `</div>`;
-
-  // Bank balances
-  html += `<div class="section-header">Bank Balances</div>`;
+  // Bank balance cards — clean view, no setup inputs
+  html += `<div class="section-header">Your Bank Accounts</div>`;
 
   if (banks.length === 0) {
     html += `<div class="card" style="text-align:center;color:var(--text3);padding:24px">
       <p>No bank accounts yet</p>
     </div>`;
   } else {
-    banks.forEach((bank, bi) => {
+    banks.forEach(bank => {
       const ledger = bankLedger(bank);
-      const safeBank = bank.replace(/'/g, "\\'");
       const assigned = Object.entries(entityBankMap)
         .filter(([_, b]) => b === bank)
         .map(([e]) => ENTITIES[e] ? ENTITIES[e].name : e);
@@ -1156,7 +1211,6 @@ function renderBanksTab(container) {
       html += `<div class="bank-card">
         <div class="bank-card-header">
           <span class="bank-card-name">${bank}</span>
-          <button class="btn-danger" onclick="removeBank('${safeBank}')">✕</button>
         </div>`;
 
       if (ledger.hasBaseline) {
@@ -1176,27 +1230,24 @@ function renderBanksTab(container) {
 
         html += `<div class="ledger-total"><span>Current Balance</span><span style="color:${ledger.current >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(ledger.current)}</span></div>
         </div>
-        <p class="bank-explain">${bankExplain(ledger)}</p>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Starting balance as of ${fmtDate(ledger.date)}</div>
-        <div style="margin-top:8px"><button class="btn-danger" onclick="clearBaseline('${safeBank}')">Clear Balance</button></div>`;
-      } else {
-        html += `<div class="bank-baseline-input">
-          <input class="input" type="number" id="bl-bank-${bi}" placeholder="Starting balance" step=".01">
-          <input class="input" type="date" id="bl-bankdate-${bi}" value="${todayStr()}" style="max-width:140px">
-          <button class="btn-secondary" onclick="saveBankBaseline(${bi})">Set</button>
-        </div>`;
+        <p class="bank-explain">${bankExplain(ledger)}</p>`;
         if (assigned.length > 0) {
-          html += `<div class="bank-card-entities">${assigned.join(' &middot; ')}</div>`;
-        } else {
-          html += `<div style="font-size:11px;color:var(--text3);margin-top:8px">No entities assigned yet</div>`;
+          html += `<div style="font-size:11px;color:var(--text3);margin-top:6px">${assigned.join(' · ')}</div>`;
         }
+      } else {
+        html += `<div style="padding:16px 0;color:var(--text3);font-size:13px;text-align:center">No starting balance set — use Reset & Re-Setup below</div>`;
       }
 
       html += `</div>`;
     });
   }
 
-  html += `<button class="btn-secondary" style="margin-top:8px;margin-bottom:20px" onclick="addBankPrompt()">+ Add Bank Account</button>`;
+  // Reset button at the very bottom
+  html += `<div class="reset-section">
+    <button class="btn-reset" onclick="resetDashboard()">Reset & Re-Setup</button>
+    <p class="reset-hint">This clears your bank accounts, assignments, and balances so you can start fresh. Your transaction history is kept.</p>
+  </div>`;
+
   container.innerHTML = html;
 }
 
