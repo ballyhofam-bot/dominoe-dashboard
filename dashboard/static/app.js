@@ -13,13 +13,12 @@ const ENTITIES = {
   auctions:    { name: 'Auction Buys',     full: 'Auction Buys',              color: '#dc2626', own: true },
 };
 
-const DEFAULT_BANKS = ['PNC', 'South State Bank'];
+const DEFAULT_BANKS = [];
 
 const ENTITY_TABS = ['overview','detail','carwash','wholesale','rentals','contractors','auctions','banks'];
 const TAB_LABELS = { overview:'Overview', detail:'Detail', carwash:'Car Wash', wholesale:'Wholesale', rentals:'Rentals', contractors:'1099', auctions:'Auctions', banks:'Banks' };
 
 const MONTHS = [
-  { key: '2026-05', label: 'May', full: 'May 2026' },
   { key: '2026-06', label: 'Jun', full: 'June 2026' },
 ];
 
@@ -71,7 +70,7 @@ if (Store.getFleet().length === 0) Store.saveFleet(DEFAULT_FLEET);
 // ── APP STATE ─────────────────────────────────────────────────────
 const state = {
   tab: 'overview',
-  month: 'both',
+  month: '2026-06',
   partnerMode: false,
   partnerEntity: 'detail',
   confirmMsg: null,
@@ -270,11 +269,7 @@ function renderHeader() {
 }
 
 function renderMonthBar() {
-  const btns = MONTHS.map(m =>
-    `<button class="month-btn ${state.month === m.key ? 'active' : ''}" onclick="setMonth('${m.key}')">${m.label}</button>`
-  ).join('');
-  const bothBtn = `<button class="month-btn ${state.month === 'both' ? 'active' : ''}" onclick="setMonth('both')">Both</button>`;
-  $('#month-bar').innerHTML = btns + bothBtn;
+  $('#month-bar').innerHTML = `<div style="text-align:center;padding:8px 0;font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.03em">June 2026</div>`;
 }
 
 function renderTabs() {
@@ -367,40 +362,6 @@ function renderOverview(container) {
 
   // Bank balances summary
   html += renderBankSummary();
-
-  // Month-over-month comparison
-  if (state.month === 'both') {
-    const may = getFiltered(null, '2026-05');
-    const jun = getFiltered(null, '2026-06');
-    const mayInc = sumBy(may, 'income'), mayExp = sumBy(may, 'expense'), mayNet = mayInc - mayExp;
-    const junInc = sumBy(jun, 'income'), junExp = sumBy(jun, 'expense'), junNet = junInc - junExp;
-
-    const revDiff = junInc - mayInc;
-    const expDiff = junExp - mayExp;
-    const netDiff = junNet - mayNet;
-
-    html += `<div class="section-header">Month over Month</div>`;
-    html += `<div class="compare-grid">
-      <div class="compare-col">
-        <div class="compare-label">May 2026</div>
-        <div class="compare-value" style="color:var(--green)">${fmt(mayInc)}</div>
-        <div class="compare-sub">Revenue</div>
-        <div class="compare-value" style="color:var(--red);font-size:16px;margin-top:8px">${fmt(mayExp)}</div>
-        <div class="compare-sub">Expenses</div>
-        <div class="compare-value" style="color:${mayNet>=0?'var(--green)':'var(--red)'};font-size:18px;margin-top:8px">${fmt(mayNet)}</div>
-        <div class="compare-sub">Net</div>
-      </div>
-      <div class="compare-col">
-        <div class="compare-label">June 2026</div>
-        <div class="compare-value" style="color:var(--green)">${fmt(junInc)}</div>
-        <div class="compare-sub">Revenue ${revDiff !== 0 ? `<span class="${revDiff>0?'trend-up':'trend-down'}">${revDiff>0?'▲':'▼'} ${fmt(Math.abs(revDiff))}</span>` : ''}</div>
-        <div class="compare-value" style="color:var(--red);font-size:16px;margin-top:8px">${fmt(junExp)}</div>
-        <div class="compare-sub">Expenses ${expDiff !== 0 ? `<span class="${expDiff<0?'trend-up':'trend-down'}">${expDiff<0?'▲':'▼'} ${fmt(Math.abs(expDiff))}</span>` : ''}</div>
-        <div class="compare-value" style="color:${junNet>=0?'var(--green)':'var(--red)'};font-size:18px;margin-top:8px">${fmt(junNet)}</div>
-        <div class="compare-sub">Net ${netDiff !== 0 ? `<span class="${netDiff>0?'trend-up':'trend-down'}">${netDiff>0?'▲':'▼'} ${fmt(Math.abs(netDiff))}</span>` : ''}</div>
-      </div>
-    </div>`;
-  }
 
   // Chart
   html += `<div class="section-header">Income vs Expenses by Entity</div>`;
