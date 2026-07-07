@@ -43,9 +43,9 @@ const CURRENT_MONTH = MONTHS[MONTHS.length - 1].key;
 // methods Ash uses to buy wholesale/auction cars — added per his request.
 const PAYMENT_METHODS = ['Cash','Card','Zelle','Venmo','PayPal','Check','AFC','Next Gear'];
 const SERVICE_TYPES = ['Full Detail','Interior','Exterior','Wash Only'];
-const WASH_TYPES = ['Basic','Premium','Works'];
-// Default price per wash by package — Ash can override per entry. Confirm these figures.
-const WASH_PRICES = { Basic: 6, Premium: 8, Works: 10 };
+// R&A Auto Spa single-wash packages and prices (from the wash-mode menu).
+const WASH_TYPES = ['Protect','Executive','Express','Ultimate'];
+const WASH_PRICES = { Protect: 20, Executive: 15, Express: 12, Ultimate: 10 };
 const AUCTION_HOUSES = ['Manheim','ADESA','Other'];
 // Wholesale + auction buy sources combined into one list (tab is now merged).
 const WHOLESALE_SOURCES = ['Manheim','ADESA','Private Sale','Dealer Trade','Other'];
