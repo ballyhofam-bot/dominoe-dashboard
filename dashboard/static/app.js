@@ -46,6 +46,9 @@ const SERVICE_TYPES = ['Full Detail','Interior','Exterior','Wash Only'];
 // R&A Auto Spa single-wash packages and prices (from the wash-mode menu).
 const WASH_TYPES = ['Protect','Executive','Express','Ultimate'];
 const WASH_PRICES = { Protect: 20, Executive: 15, Express: 12, Ultimate: 10 };
+// Unlimited monthly membership tiers and their per-month price.
+const MEMBERSHIP_TYPES = ['Protect','Executive','Express','Ultimate'];
+const MEMBERSHIP_PRICES = { Protect: 40, Executive: 30, Express: 24, Ultimate: 20 };
 const AUCTION_HOUSES = ['Manheim','ADESA','Other'];
 // Wholesale + auction buy sources combined into one list (tab is now merged).
 const WHOLESALE_SOURCES = ['Manheim','ADESA','Private Sale','Dealer Trade','Other'];
@@ -702,6 +705,19 @@ function entitySpecificFields(entity) {
 
     case 'carwash':
       h += `<div id="carwash-income-fields">`;
+
+      // Per-wash vs Membership mode
+      h += `<div class="field">
+        <label class="field-label">Kind</label>
+        <div class="toggle-row">
+          <button type="button" class="toggle-btn active" data-value="wash" onclick="toggleWashMode(this)">Single Washes</button>
+          <button type="button" class="toggle-btn" data-value="membership" onclick="toggleWashMode(this)">Membership</button>
+        </div>
+        <input type="hidden" name="washMode" value="wash">
+      </div>`;
+
+      // ── Single-wash block ──
+      h += `<div id="carwash-wash-block">`;
       h += `<div class="field">
         <label class="field-label">Wash Type</label>
         <select class="select" name="washType" onchange="onWashTypeChange(this)">
@@ -717,6 +733,28 @@ function entitySpecificFields(entity) {
         <input class="input" type="number" name="washPrice" step=".01" value="${WASH_PRICES[WASH_TYPES[0]] ?? ''}" placeholder="0.00">
         <div class="field-help">We total this up for you automatically.</div>
       </div>`;
+      h += `</div>`;
+
+      // ── Membership block ──
+      h += `<div id="carwash-membership-block" style="display:none">`;
+      h += `<div class="field">
+        <label class="field-label">Membership Tier</label>
+        <select class="select" name="membershipTier" onchange="onMembershipTierChange(this)">
+          ${MEMBERSHIP_TYPES.map(o => `<option value="${o}">${o} — ${fmt(MEMBERSHIP_PRICES[o])}/mo</option>`).join('')}
+        </select>
+      </div>`;
+      h += inputField('memberName', 'Member Name (optional)', 'text', 'Customer name');
+      h += `<div class="field">
+        <label class="field-label">How Many Members</label>
+        <input class="input" type="number" name="memberCount" min="1" step="1" value="1" placeholder="1">
+        <div class="field-help">Log one member, or a batch you collected together this month.</div>
+      </div>`;
+      h += `<div class="field">
+        <label class="field-label">Price per Member / Month</label>
+        <input class="input" type="number" name="membershipPrice" step=".01" value="${MEMBERSHIP_PRICES[MEMBERSHIP_TYPES[0]] ?? ''}" placeholder="0.00">
+      </div>`;
+      h += `</div>`;
+
       h += `<div id="carwash-calc" class="calc-row" style="display:none">
         <div class="calc-label" id="carwash-calc-label">Total</div>
         <div class="calc-value" id="carwash-total" style="color:var(--green)">$0.00</div>
@@ -859,6 +897,21 @@ function toggleType(btn) {
   if (!isExpense) computeCarwash();
 }
 
+// Car Wash: switch between Single Washes and Membership entry
+function toggleWashMode(btn) {
+  const row = btn.parentElement;
+  row.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const hidden = row.parentElement.querySelector('input[name="washMode"]');
+  if (hidden) hidden.value = btn.dataset.value;
+  const isMember = btn.dataset.value === 'membership';
+  const washBlock = document.getElementById('carwash-wash-block');
+  const memBlock = document.getElementById('carwash-membership-block');
+  if (washBlock) washBlock.style.display = isMember ? 'none' : '';
+  if (memBlock) memBlock.style.display = isMember ? '' : 'none';
+  computeCarwash();
+}
+
 // Car Wash: prefill price when the wash package changes, then re-total
 function onWashTypeChange(sel) {
   const form = sel.closest('form');
@@ -868,18 +921,37 @@ function onWashTypeChange(sel) {
   computeCarwash();
 }
 
-// Car Wash: number of washes × price per wash, totalled automatically
+// Car Wash: prefill monthly price when the membership tier changes, then re-total
+function onMembershipTierChange(sel) {
+  const form = sel.closest('form');
+  if (!form) return;
+  const priceInput = form.querySelector('[name="membershipPrice"]');
+  if (priceInput && MEMBERSHIP_PRICES[sel.value] != null) priceInput.value = MEMBERSHIP_PRICES[sel.value];
+  computeCarwash();
+}
+
+// Car Wash: total (washes × price) OR (members × monthly price), depending on mode
 function computeCarwash() {
   const form = document.querySelector('form');
   if (!form) return;
-  const count = parseInt(form.querySelector('[name="washCount"]')?.value) || 0;
-  const price = parseFloat(form.querySelector('[name="washPrice"]')?.value) || 0;
+  const mode = form.querySelector('[name="washMode"]')?.value || 'wash';
+  let count, price, unit;
+  if (mode === 'membership') {
+    count = parseInt(form.querySelector('[name="memberCount"]')?.value) || 0;
+    price = parseFloat(form.querySelector('[name="membershipPrice"]')?.value) || 0;
+    unit = count === 1 ? 'member' : 'members';
+  } else {
+    count = parseInt(form.querySelector('[name="washCount"]')?.value) || 0;
+    price = parseFloat(form.querySelector('[name="washPrice"]')?.value) || 0;
+    unit = count === 1 ? 'wash' : 'washes';
+  }
   const total = count * price;
   const calcDiv = document.getElementById('carwash-calc');
   if (!calcDiv) return;
   if (count > 0 && price > 0) {
     calcDiv.style.display = 'flex';
-    document.getElementById('carwash-calc-label').textContent = `Total (${count} × ${fmt(price)})`;
+    document.getElementById('carwash-calc-label').textContent =
+      `${mode === 'membership' ? 'Monthly' : 'Total'} (${count} ${unit} × ${fmt(price)})`;
     document.getElementById('carwash-total').textContent = fmt(total);
   } else {
     calcDiv.style.display = 'none';
@@ -1004,13 +1076,21 @@ function submitEntry(e, entity) {
       break;
     }
     case 'carwash': {
-      entry.washType = data.washType || '';
-      entry.washCount = parseInt(data.washCount) || 1;
       entry.expenseDesc = data.expenseDesc || '';
+      entry.washMode = data.washMode || 'wash';
       if (entry.type === 'expense') {
         entry.amount = parseFloat(data.carwashExpenseAmount) || 0;
+      } else if (entry.washMode === 'membership') {
+        // Income = number of members × monthly membership price
+        entry.membershipTier = data.membershipTier || '';
+        entry.memberName = data.memberName || '';
+        entry.memberCount = parseInt(data.memberCount) || 1;
+        entry.membershipPrice = parseFloat(data.membershipPrice) || 0;
+        entry.amount = entry.memberCount * entry.membershipPrice;
       } else {
         // Income = number of washes × price per wash, totalled automatically
+        entry.washType = data.washType || '';
+        entry.washCount = parseInt(data.washCount) || 1;
         entry.washPrice = parseFloat(data.washPrice) || 0;
         entry.amount = entry.washCount * entry.washPrice;
       }
@@ -1144,6 +1224,11 @@ function renderEntityHistory(entity) {
     html += renderWholesaleSummary();
   }
 
+  // Car Wash membership recurring-revenue summary
+  if (entity === 'carwash') {
+    html += renderMembershipSummary();
+  }
+
   // Contractor YTD totals for 1099 tab
   if (entity === 'contractors') {
     const totals = contractorTotals();
@@ -1196,12 +1281,42 @@ function renderWholesaleSummary() {
   return html;
 }
 
+// Car Wash memberships logged this month → member count + monthly recurring revenue
+function renderMembershipSummary() {
+  const members = getFiltered('carwash', state.month).filter(e => e.washMode === 'membership' && e.type === 'income');
+  if (members.length === 0) return '';
+
+  const totalMembers = members.reduce((s, e) => s + (e.memberCount || 1), 0);
+  const mrr = members.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+  // Break down by tier
+  const byTier = {};
+  members.forEach(e => {
+    const t = e.membershipTier || 'Other';
+    if (!byTier[t]) byTier[t] = { count: 0, mrr: 0 };
+    byTier[t].count += e.memberCount || 1;
+    byTier[t].mrr += parseFloat(e.amount) || 0;
+  });
+
+  let html = `<div class="section-header">Memberships (Monthly Recurring)</div>`;
+  html += `<div class="card">`;
+  Object.entries(byTier).forEach(([tier, d]) => {
+    html += `<div class="ws-sum-row"><span>${tier} — ${d.count} ${d.count === 1 ? 'member' : 'members'}</span><span>${fmt(d.mrr)}/mo</span></div>`;
+  });
+  html += `<div class="ws-sum-total"><span>${totalMembers} ${totalMembers === 1 ? 'member' : 'members'} · Recurring / month</span><span style="color:var(--green)">${fmt(mrr)}</span></div>`;
+  html += `</div>`;
+  html += `<p class="bank-explain">This is your monthly recurring wash revenue from memberships logged this month. Re-enter members each month they pay so it flows into that month's numbers.</p>`;
+  return html;
+}
+
 function entryDescription(e) {
   switch (e.entity) {
     case 'detail':
       return `${e.serviceType || 'Detail'} — ${e.customerName || 'Customer'}`;
     case 'carwash':
       if (e.type === 'expense' && e.expenseDesc) return e.expenseDesc;
+      if (e.washMode === 'membership')
+        return `${e.membershipTier || ''} Membership${e.memberCount > 1 ? ' ×' + e.memberCount : ''}${e.memberName ? ' — ' + e.memberName : ''}`.trim();
       return `${e.washType || 'Car Wash'}${e.washCount > 1 ? ' ×' + e.washCount : ''}`;
     case 'wholesale': {
       const v = e.vehicleDesc || 'Wholesale';
@@ -1306,8 +1421,8 @@ document.addEventListener('input', function(e) {
     calcDetailShare();
   }
 
-  // Car Wash: auto-total washes × price
-  if (e.target.name === 'washCount' || e.target.name === 'washPrice') {
+  // Car Wash: auto-total washes × price, or members × monthly price
+  if (['washCount','washPrice','memberCount','membershipPrice'].includes(e.target.name)) {
     computeCarwash();
   }
 
